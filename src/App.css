@@ -1,0 +1,16 @@
+.app {
+  text-align: center;
+  font-family: sans-serif;
+  margin-top: 2rem;
+}
+.input-panel {
+  margin-bottom: 1rem;
+}
+.input-panel input {
+  padding: 0.5rem;
+  font-size: 1rem;
+}
+.input-panel button {
+  margin-left: 0.5rem;
+  padding: 0.5rem 1rem;
+}
