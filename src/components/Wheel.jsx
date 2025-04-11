@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import confetti from 'canvas-confetti';
 import { db, ref, onValue, set } from '../firebase';
 import './Wheel.css';
+import { launchConfetti } from '../effects/confettiManager';
+
+let globalSpinLock = false;
+let lastSpinId = null;
+let hasInitialized = false;
+let lastWrittenSpinId = null;
 
 const Wheel = ({ choices }) => {
   const canvasRef = useRef(null);
@@ -14,24 +19,67 @@ const Wheel = ({ choices }) => {
     const spinRef = ref(db, 'currentSpin');
     onValue(spinRef, (snapshot) => {
       const data = snapshot.val();
-      if (data && !isSpinning) {
-        setAngle(data.angle);
-        setResult(data.result);
-        if (data.triggerConfetti) {
-          confetti();
-          new Audio('/fanfare.mp3').play();
-        }
+
+      if (!hasInitialized) {
+        hasInitialized = true;
+        lastSpinId = data?.spinId || null;
+        return; // Skip the first call
+      }
+
+      if (
+        data &&
+        !isSpinning &&
+        data.spinId !== lastSpinId &&
+        data.spinId !== lastWrittenSpinId &&
+        data.angle !== angle
+      ) {
+        lastSpinId = data.spinId;
+
+        const targetAngle = data.angle;
+        const resultChoice = data.result;
+
+        const start = performance.now();
+        const duration = 4000;
+        const initialAngle = angle;
+
+        const animate = (time) => {
+          const elapsed = time - start;
+          const t = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const newAngle = initialAngle + (targetAngle - initialAngle) * eased;
+          setAngle(newAngle);
+
+          if (t < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            setAngle(targetAngle);
+            setResult(resultChoice);
+            if (data.triggerConfetti) {
+              console.log('🎉 Confetti triggered for result:', resultChoice);
+              launchConfetti('default');
+              new Audio('/fanfare.mp3').play();
+            }
+          }
+        };
+
+        requestAnimationFrame(animate);
       }
     });
-  }, []);
+  }, [angle, isSpinning]);
 
   const spinWheel = () => {
-    if (isSpinning || choices.length < 2) return;
+    if (isSpinning || globalSpinLock || choices.length < 2) return;
+    console.log('🎯 Spin triggered');
+
     setIsSpinning(true);
+    globalSpinLock = true;
     const spins = 5 + Math.random() * 5;
     const degrees = spins * 360;
     const duration = 4000;
     const start = performance.now();
+
+    const spinId = Date.now();
+    lastWrittenSpinId = spinId;
 
     const animate = (time) => {
       const elapsed = time - start;
@@ -39,9 +87,13 @@ const Wheel = ({ choices }) => {
       const eased = 1 - Math.pow(1 - t, 3);
       const current = angle + degrees * eased;
       setAngle(current);
-      if (t < 1) requestAnimationFrame(animate);
-      else {
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
         setIsSpinning(false);
+        globalSpinLock = false;
+
         const finalAngle = (angle + degrees) % 360;
         const index = Math.floor(((360 - finalAngle) % 360) / (360 / choices.length));
         const resultChoice = choices[index];
@@ -50,8 +102,13 @@ const Wheel = ({ choices }) => {
         set(ref(db, 'currentSpin'), {
           angle: finalAngle,
           result: resultChoice,
-          triggerConfetti: true
+          triggerConfetti: true,
+          spinId: spinId
         });
+
+        // Local confetti and sound for spinner
+        launchConfetti('default');
+        new Audio('/fanfare.mp3').play();
       }
     };
 

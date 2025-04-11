@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Wheel from './components/Wheel';
 import './App.css';
 import { initDiscordSDK } from './discord';
-
+import { db, ref, onValue, set } from './firebase';
 
 const LOCAL_STORAGE_KEY = 'wheelChoices';
 
@@ -16,23 +16,24 @@ function App() {
   }, []);
 
   
-  // Load choices from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (stored) setChoices(JSON.parse(stored));
+    const choicesRef = ref(db, 'choices');
+    onValue(choicesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) setChoices(data);
+    });
   }, []);
-
-  // Save to localStorage
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(choices));
-  }, [choices]);
+  
 
   const handleAddChoice = () => {
-    if (newChoice.trim() && !choices.includes(newChoice.trim())) {
-      setChoices([...choices, newChoice.trim()]);
+    const trimmed = newChoice.trim();
+    if (trimmed && !choices.includes(trimmed)) {
+      const updated = [...choices, trimmed];
+      set(ref(db, 'choices'), updated); // write to Firebase
       setNewChoice('');
     }
   };
+
 
   return (
     <div className="app">
