@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Wheel from './components/Wheel';
 import './App.css';
-import { useEffect } from 'react';
 import { initDiscordSDK } from './discord';
 
 
